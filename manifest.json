@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "id": "dicey.bar",
-  "name": "Dicey Bar",
-  "version": "1.0.0",
-  "author": "Omarchy",
-  "description": "Status bar with widgets",
+  "id": "io.github.pulkitchauhan.island-bar",
+  "name": "Island Bar",
+  "version": "0.1.0",
+  "author": "Pulkit Chauhan",
+  "license": "Apache-2.0",
+  "description": "A floating three-island status bar for Omarchy.",
   "kinds": [
     "bar"
   ],

@@ -80,9 +80,14 @@ Item {
   property color background: Color.bar.background
   // Apply translucency to island paint only. Rectangle.opacity would also
   // fade its child widgets, making bar text and icons hard to read.
-  property color islandBackground: Qt.rgba(background.r, background.g, background.b, 0.95)
+  property color islandBackground: islandStyle.background
   property color urgent: Color.bar.active
   property string monitorSignature: ""
+
+  IslandStyle {
+    id: islandStyle
+    baseColor: root.background
+  }
 
   Behavior on barForeground { enabled: root.foregroundAnimationEnabled; ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
   Behavior on background { ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
@@ -343,7 +348,7 @@ Item {
   readonly property int barSize: vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
   // Separate the floating islands from the top edge, matching the old Waybar
   // treatment without affecting bars placed on other edges.
-  readonly property int topIslandMargin: Style.space(5)
+  readonly property int topIslandMargin: islandStyle.topMargin
 
   function normalizePosition(value) {
     return BarModel.normalizePosition(value)
@@ -1181,15 +1186,15 @@ Item {
         // Keep the three Waybar-era groups visually distinct while retaining
         // the Quickshell widgets and their popouts. The padding, radius, and
         // edge offsets intentionally match the saved island-style Waybar CSS.
-        Rectangle {
+        IslandSurface {
           id: leftIsland
           visible: leftModules.visible
           width: leftModules.width + Style.space(20)
           height: parent.height - Style.space(2)
-          radius: Style.space(6)
-          color: root.islandBackground
+          radius: islandStyle.radius
+          fillColor: root.islandBackground
           anchors.left: parent.left
-          anchors.leftMargin: Style.space(10)
+          anchors.leftMargin: islandStyle.edgeMargin
           anchors.verticalCenter: parent.verticalCenter
 
           LeftModules {
@@ -1198,13 +1203,13 @@ Item {
           }
         }
 
-        Rectangle {
+        IslandSurface {
           id: centerIsland
           visible: centerModules.visible
           width: centerModules.width + Style.space(20)
           height: parent.height - Style.space(2)
-          radius: Style.space(6)
-          color: root.islandBackground
+          radius: islandStyle.radius
+          fillColor: root.islandBackground
           anchors.centerIn: parent
 
           IslandCenterModules {
@@ -1213,15 +1218,15 @@ Item {
           }
         }
 
-        Rectangle {
+        IslandSurface {
           id: rightIsland
           visible: rightModules.visible
           width: rightModules.width + Style.space(20)
           height: parent.height - Style.space(2)
-          radius: Style.space(6)
-          color: root.islandBackground
+          radius: islandStyle.radius
+          fillColor: root.islandBackground
           anchors.right: parent.right
-          anchors.rightMargin: Style.space(10)
+          anchors.rightMargin: islandStyle.edgeMargin
           anchors.verticalCenter: parent.verticalCenter
 
           RightModules {

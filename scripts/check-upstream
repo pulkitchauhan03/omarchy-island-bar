@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+OMARCHY_ROOT="${OMARCHY_PATH:-/usr/share/omarchy}"
+BAR_DIR="$OMARCHY_ROOT/shell/plugins/bar"
+HASH_FILE="$ROOT_DIR/upstream/SOURCE_SHA256"
+
+[[ -d $BAR_DIR ]] || {
+  printf 'Island Bar: Omarchy bar source not found at %s\n' "$BAR_DIR" >&2
+  exit 1
+}
+[[ -f $HASH_FILE ]] || {
+  printf 'Island Bar: missing %s\n' "$HASH_FILE" >&2
+  exit 1
+}
+
+changed=0
+while read -r expected file; do
+  [[ -n ${expected:-} && -n ${file:-} ]] || continue
+  actual=$(sha256sum "$BAR_DIR/$file" | awk '{print $1}')
+  if [[ $actual != "$expected" ]]; then
+    printf 'Changed: %s\n  expected %s\n  actual   %s\n' "$file" "$expected" "$actual"
+    changed=1
+  fi
+done <"$HASH_FILE"
+
+if (( changed )); then
+  printf "The installed Omarchy bar differs from Island Bar's recorded baseline.\n"
+  printf 'Review and run scripts/sync-upstream before publishing an update.\n'
+  exit 2
+fi
+
+printf 'Island Bar baseline matches the installed Omarchy bar.\n'

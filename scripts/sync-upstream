@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+OMARCHY_ROOT="${OMARCHY_PATH:-/usr/share/omarchy}"
+BAR_DIR="$OMARCHY_ROOT/shell/plugins/bar"
+PATCH_FILE="$ROOT_DIR/patches/island-bar.patch"
+STAGE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/island-bar-sync.XXXXXX")
+trap 'rm -rf -- "$STAGE_DIR"' EXIT
+
+[[ -f $BAR_DIR/Bar.qml && -f $BAR_DIR/BarModel.js ]] || {
+  printf 'Island Bar: Omarchy bar source is incomplete at %s\n' "$BAR_DIR" >&2
+  exit 1
+}
+[[ -f $PATCH_FILE ]] || {
+  printf 'Island Bar: missing %s\n' "$PATCH_FILE" >&2
+  exit 1
+}
+
+cp -- "$BAR_DIR/Bar.qml" "$STAGE_DIR/Bar.qml"
+cp -- "$BAR_DIR/BarModel.js" "$STAGE_DIR/BarModel.js"
+
+printf 'Checking Island Bar patch against the installed Omarchy bar...\n'
+if ! (cd "$STAGE_DIR" && patch --dry-run -p1 <"$PATCH_FILE" >/dev/null); then
+  printf 'The Island Bar patch no longer applies cleanly.\n' >&2
+  printf 'Update patches/island-bar.patch manually for this Omarchy version.\n' >&2
+  exit 2
+fi
+
+(cd "$STAGE_DIR" && patch -p1 <"$PATCH_FILE" >/dev/null)
+
+install -m 0644 "$STAGE_DIR/Bar.qml" "$ROOT_DIR/Bar.qml"
+install -m 0644 "$STAGE_DIR/BarModel.js" "$ROOT_DIR/BarModel.js"
+
+version=$(omarchy version 2>/dev/null || printf 'unknown')
+sha_bar=$(sha256sum "$BAR_DIR/Bar.qml" | awk '{print $1}')
+sha_model=$(sha256sum "$BAR_DIR/BarModel.js" | awk '{print $1}')
+sha_manifest=$(sha256sum "$BAR_DIR/manifest.json" | awk '{print $1}')
+dicey_baseline=$(sed -n '1p' "$ROOT_DIR/upstream/SOURCE_COMMIT")
+
+if [[ -z $dicey_baseline ]]; then
+  dicey_baseline="Dicey baseline retained in Git history."
+fi
+
+printf 'Omarchy package baseline: %s\n' "$version" >"$ROOT_DIR/upstream/OMARCHY_VERSION"
+printf '%s\nOmarchy package baseline: %s\n' "$dicey_baseline" "$version" >"$ROOT_DIR/upstream/SOURCE_COMMIT"
+printf '%s  Bar.qml\n%s  BarModel.js\n%s  manifest.json\n' \
+  "$sha_bar" "$sha_model" "$sha_manifest" >"$ROOT_DIR/upstream/SOURCE_SHA256"
+
+printf 'Island Bar files refreshed successfully. Review git diff, validate, and commit manually.\n'

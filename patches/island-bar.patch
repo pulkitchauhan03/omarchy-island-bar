@@ -1,0 +1,256 @@
+--- a/Bar.qml
++++ b/Bar.qml
+@@ -15 +15,5 @@
+-  required property string omarchyPath
++  // Third-party bars are created by an asynchronous Loader and receive these
++  // values immediately afterward from omarchy-shell. They cannot be `required`
++  // here: QML validates required properties before Loader.onLoaded can inject
++  // them, which prevents the bar from starting after a shell restart.
++  property string omarchyPath: ""
+@@ -17 +21 @@
+-  required property var barWidgetRegistry
++  property var barWidgetRegistry: null
+@@ -22 +26 @@
+-  required property var barConfig
++  property var barConfig: ({})
+@@ -25,0 +30,5 @@
++  // Third-party bars receive their host context just after the asynchronous
++  // Loader constructs them. Do not create module slots until then: otherwise
++  // they resolve against an empty registry once and reserve blank bar space.
++  readonly property bool hostReady: omarchyPath !== "" && barWidgetRegistry !== null
++    && Util.isPlainObject(barConfig) && Object.keys(barConfig).length > 0
+@@ -71,0 +81,3 @@
++  // Apply translucency to island paint only. Rectangle.opacity would also
++  // fade its child widgets, making bar text and icons hard to read.
++  property color islandBackground: islandStyle.background
+@@ -72,0 +85,6 @@
++  property string monitorSignature: ""
++
++  IslandStyle {
++    id: islandStyle
++    baseColor: root.background
++  }
+@@ -330,0 +349,3 @@
++  // Separate the floating islands from the top edge, matching the old Waybar
++  // treatment without affecting bars placed on other edges.
++  readonly property int topIslandMargin: islandStyle.topMargin
+@@ -608 +629,8 @@
+-    onTriggered: if (!root.centerSectionHovered && !root.barHovered) root.centerSectionRevealHeld = false
++    // A popout belongs to one of the revealed modules. Keep that module mounted
++    // while its panel is open; otherwise leaving the bar destroys its owner and
++    // immediately closes the panel.
++    onTriggered: if (!root.centerSectionHovered && !root.barHovered && !root.activePopout) root.centerSectionRevealHeld = false
++  }
++
++  onActivePopoutChanged: {
++    if (!activePopout && !centerSectionHovered && !barHovered) centerSectionRevealTimer.restart()
+@@ -616,0 +645,45 @@
++  // Hyprland's scale command can replace a layer surface without producing a
++  // dependable QScreen scale signal. Poll the compositor's monitor signature
++  // and restart the shell once after a real layout/scale transition.
++  function observeMonitorSignature(signature) {
++    var next = String(signature || "").trim()
++    if (!next) return
++    if (!monitorSignature) {
++      monitorSignature = next
++      return
++    }
++    if (next === monitorSignature) return
++    monitorSignature = next
++    monitorChangeRestartTimer.restart()
++  }
++
++  Timer {
++    id: monitorSignatureTimer
++    interval: 1500
++    running: true
++    repeat: true
++    onTriggered: if (!monitorSignatureProbe.running) monitorSignatureProbe.running = true
++  }
++
++  Process {
++    id: monitorSignatureProbe
++    command: ["bash", "-c", "hyprctl monitors -j | jq -c '[.[] | {name, scale, width, height, x, y}]'"]
++    stdout: SplitParser { onRead: function(line) { root.observeMonitorSignature(line) } }
++  }
++
++  Timer {
++    id: monitorChangeRestartTimer
++    interval: 1000
++    onTriggered: root.run("omarchy restart shell")
++  }
++
++  // `omarchy-hyprland-monitor-scaling` appends this file immediately after it
++  // applies a real scale. It is the authoritative signal for keyboard and
++  // monitor-panel scale changes, including transitions QScreen reports late.
++  FileView {
++    path: root.stateHome + "/omarchy/monitor-scaling.log"
++    watchChanges: true
++    printErrors: false
++    onFileChanged: monitorChangeRestartTimer.restart()
++  }
++
+@@ -952 +1025 @@
+-    model: Quickshell.screens
++    model: root.hostReady ? Quickshell.screens : []
+@@ -1000 +1073 @@
+-    ScreenMoveRemap {
++    ScaleSafeRemap {
+@@ -1006 +1079 @@
+-      top: root.barHidden && root.position === "top" ? -root.barSize : 0
++      top: root.position === "top" ? root.topIslandMargin + (root.barHidden ? -root.barSize : 0) : 0
+@@ -1021 +1094,4 @@
+-    color: root.transparent ? "transparent" : root.background
++    // Horizontal bars use floating islands, so their layer surface stays
++    // clear. Keep the standard solid surface for vertical bars, whose module
++    // layout is intentionally inherited unchanged from the stock plugin.
++    color: root.vertical && !root.transparent ? root.background : "transparent"
+@@ -1110,3 +1186,10 @@
+-        CenterModules { anchors.fill: parent }
+-
+-        LeftModules {
++        // Keep the three Waybar-era groups visually distinct while retaining
++        // the Quickshell widgets and their popouts. The padding, radius, and
++        // edge offsets intentionally match the saved island-style Waybar CSS.
++        IslandSurface {
++          id: leftIsland
++          visible: leftModules.visible
++          width: leftModules.width + Style.space(20)
++          height: parent.height - Style.space(2)
++          radius: islandStyle.radius
++          fillColor: root.islandBackground
+@@ -1114 +1197 @@
+-          anchors.leftMargin: Style.space(8)
++          anchors.leftMargin: islandStyle.edgeMargin
+@@ -1115,0 +1199,5 @@
++
++          LeftModules {
++            id: leftModules
++            anchors.centerIn: parent
++          }
+@@ -1118 +1206,22 @@
+-        RightModules {
++        IslandSurface {
++          id: centerIsland
++          visible: centerModules.visible
++          width: centerModules.width + Style.space(20)
++          height: parent.height - Style.space(2)
++          radius: islandStyle.radius
++          fillColor: root.islandBackground
++          anchors.centerIn: parent
++
++          IslandCenterModules {
++            id: centerModules
++            anchors.centerIn: parent
++          }
++        }
++
++        IslandSurface {
++          id: rightIsland
++          visible: rightModules.visible
++          width: rightModules.width + Style.space(20)
++          height: parent.height - Style.space(2)
++          radius: islandStyle.radius
++          fillColor: root.islandBackground
+@@ -1120 +1229 @@
+-          anchors.rightMargin: Style.space(8)
++          anchors.rightMargin: islandStyle.edgeMargin
+@@ -1121,0 +1231,5 @@
++
++          RightModules {
++            id: rightModules
++            anchors.centerIn: parent
++          }
+@@ -1390,0 +1505,74 @@
++  // A compact variant of CenterModules for the floating island. Unlike the
++  // stock full-width center region, this item sizes itself to its widgets. It
++  // still gives the configured centerAnchor equal room on either side, so the
++  // anchor (normally the clock) stays at the physical center of the display.
++  component IslandCenterModules: Item {
++    id: islandCenterRoot
++
++    property var entries: root.layoutEntries("center")
++    readonly property bool hasAnchor: root.entryIndex(entries, root.centerAnchor) !== -1
++    readonly property var anchorEntry: root.findCenterAnchorEntry()
++    // At rest the island hugs the center anchor. Once the anchor is hovered,
++    // reveal equal room on both sides so it can grow around the flanking
++    // modules without moving the clock off the physical display center.
++    readonly property bool flanksRevealed: root.centerSectionRevealHeld
++    readonly property real flankWidth: flanksRevealed ? Math.max(beforeAnchor.width, afterAnchor.width) : 0
++
++    implicitWidth: hasAnchor
++      ? flankWidth * 2 + centerAnchorModule.width
++      : allCenterModules.width
++    implicitHeight: hasAnchor
++      ? Math.max(beforeAnchor.height, centerAnchorModule.height, afterAnchor.height)
++      : allCenterModules.height
++    width: implicitWidth
++    height: implicitHeight
++
++    HoverHandler {
++      onHoveredChanged: root.setCenterSectionHovered(hovered)
++    }
++
++    CenterGestureArea {
++      anchors.fill: parent
++      z: -1
++    }
++
++    ModuleList {
++      id: allCenterModules
++      visible: !islandCenterRoot.hasAnchor
++      entries: islandCenterRoot.entries
++      region: "center"
++      anchors.centerIn: parent
++    }
++
++    ModuleList {
++      id: beforeAnchor
++      visible: islandCenterRoot.hasAnchor && islandCenterRoot.flanksRevealed
++      keepLoaded: islandCenterRoot.hasAnchor
++      entries: root.entriesBefore(islandCenterRoot.entries, root.centerAnchor)
++      region: "center"
++      anchors.right: centerAnchorModule.left
++      anchors.verticalCenter: centerAnchorModule.verticalCenter
++    }
++
++    ModuleSlot {
++      id: centerAnchorModule
++      visible: islandCenterRoot.hasAnchor
++      entry: islandCenterRoot.anchorEntry
++      region: "center"
++      anchors.horizontalCenter: parent.horizontalCenter
++      anchors.verticalCenter: parent.verticalCenter
++    }
++
++    ModuleList {
++      id: afterAnchor
++      visible: islandCenterRoot.hasAnchor && islandCenterRoot.flanksRevealed
++      // Load providers such as Weather before hover so their first icon paint
++      // is immediate, while the hidden Loader keeps the resting island compact.
++      keepLoaded: islandCenterRoot.hasAnchor
++      entries: root.entriesAfter(islandCenterRoot.entries, root.centerAnchor)
++      region: "center"
++      anchors.left: centerAnchorModule.right
++      anchors.verticalCenter: centerAnchorModule.verticalCenter
++    }
++  }
++
+@@ -1420,3 +1607,0 @@
+-      // A widget above us propagates its composed press-and-hold down here without
+-      // ever handing over the grab, so we'd get no release or cancel to end the move.
+-      if (!gestureArea.pressed) return
+@@ -1477,0 +1663 @@
++    property bool keepLoaded: false
+@@ -1480,6 +1666,5 @@
+-    // A hidden list must not build its modules. The center section declares
+-    // both an anchored and an unanchored arrangement and shows whichever
+-    // fits, so leaving the other one loaded mounts every center module
+-    // twice — two IPC handlers registered for the same target, two clocks
+-    // ticking, two of every timer and fetch behind them.
+-    active: visible && entries.length > 0
++    // Most hidden lists must not build their modules: the center section
++    // declares both anchored and unanchored arrangements, so loading both
++    // would mount every module twice. The compact island flanks opt in to
++    // keepLoaded so provider-backed icons are ready when hover reveals them.
++    active: (visible || keepLoaded) && entries.length > 0

@@ -75,7 +75,10 @@ Item {
   property color themeContrastForeground: Color.background
   property color transparentForeground: Color.bar.text
   property color foreground: themeForeground
-  property color barForeground: useTransparentForeground ? transparentForeground : themeForeground
+  // Islands always paint their own surface. Do not use Omarchy's wallpaper-
+  // sampled transparent-bar foreground here: it may be dark for a light
+  // wallpaper while the island itself remains dark.
+  property color barForeground: themeForeground
   property bool foregroundAnimationEnabled: true
   property color background: Color.bar.background
   // Apply translucency to island paint only. Rectangle.opacity would also

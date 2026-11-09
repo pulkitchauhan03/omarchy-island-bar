@@ -1191,7 +1191,7 @@ Item {
         // edge offsets intentionally match the saved island-style Waybar CSS.
         IslandSurface {
           id: leftIsland
-          visible: leftModules.visible
+          visible: root.layoutEntries("left").length > 0
           width: leftModules.width + Style.space(20)
           height: parent.height - Style.space(2)
           radius: islandStyle.radius
@@ -1208,7 +1208,7 @@ Item {
 
         IslandSurface {
           id: centerIsland
-          visible: centerModules.visible
+          visible: root.layoutEntries("center").length > 0
           width: centerModules.width + Style.space(20)
           height: parent.height - Style.space(2)
           radius: islandStyle.radius
@@ -1223,7 +1223,7 @@ Item {
 
         IslandSurface {
           id: rightIsland
-          visible: rightModules.visible
+          visible: root.layoutEntries("right").length > 0
           width: rightModules.width + Style.space(20)
           height: parent.height - Style.space(2)
           radius: islandStyle.radius
